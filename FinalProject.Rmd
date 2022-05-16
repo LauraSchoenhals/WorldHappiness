@@ -1,0 +1,365 @@
+# Project World Happiness Data
+
+## Introduction
+
+We've all heard that money can't buy happiness, but we've also heard lots of rejoinders, such as Caroline's "I'd rather cry in a yacht." Our Declaration of Independence claims the right to pursue happiness, but what makes for a happy life?
+
+This project uses World Happiness Data from Kaggle to investigate predictors of happiness at a national level. It investigates correlations between happiness score and other variables, such as life expectancy, average GDP per capita, and generosity scores. The first goal of this project is to find which variables correlate most strongly with happiness scores. The second goal of this project is to create a linear regression model to predict a country's happiness score using several of these variables.
+
+```{r}
+# import data
+library(tidyverse)
+WorldHappiness <- read.csv("world-happiness-report-2015-2022-cleaned.csv")
+head(WorldHappiness)
+```
+
+```{r}
+# Convert to Numeric
+
+WorldHappiness <- WorldHappiness %>%
+  mutate(Happiness.Score = as.numeric(Happiness.Score),
+         GDPpercapita = as.numeric(Economy..GDP.per.Capita.),
+         FamilySocialSupport = as.numeric(Family..Social.Support.),
+         LifeExpectancy = as.numeric(Health..Life.Expectancy.),
+         Freedom = as.numeric(Freedom),
+         TrustGovCorrup = as.numeric(Trust..Government.Corruption.),
+         Generosity = as.numeric(Generosity))
+         
+```
+
+
+## Summary Statistics
+
+```{r}
+#group by region; summarize 7 variables
+WorldHappiness %>% 
+  group_by(Region) %>%
+  dplyr::summarize(mean_Happiness = mean(Happiness.Score, na.rm = TRUE), 
+                   mean_LE = mean(LifeExpectancy, na.rm = TRUE),
+                   mean_GDP = mean(GDPpercapita, na.rm = TRUE),
+                   mean_FSS = mean(FamilySocialSupport, na.rm = TRUE),
+                   mean_Freedom = mean(Freedom, na.rm = TRUE),
+                   mean_Trust = mean(TrustGovCorrup, na.rm = TRUE),
+                   mean_Generosity = mean(Generosity, na.rm = TRUE)) %>%
+  arrange(desc(mean_Happiness))
+```
+
+```{r}
+#group by year, summarize 7 variables
+WorldHappiness %>%
+  group_by(Year)%>%
+  dplyr::summarize(mean_Happiness = mean(Happiness.Score, na.rm = TRUE), 
+                   mean_LE = mean(LifeExpectancy, na.rm = TRUE),
+                   mean_GDP = mean(GDPpercapita, na.rm = TRUE),
+                   mean_FSS = mean(FamilySocialSupport, na.rm = TRUE),
+                   mean_Freedom = mean(Freedom, na.rm = TRUE),
+                   mean_Trust = mean(TrustGovCorrup, na.rm = TRUE),
+                   mean_Generosity = mean(Generosity, na.rm = TRUE)) %>%
+  arrange(Year)
+```
+
+## Plots
+
+```{r}
+#LE and GDP
+
+ggplot(data = WorldHappiness) +
+  geom_point(mapping = aes(LifeExpectancy, GDPpercapita, color = Region)) +
+  facet_wrap(~ Year)
+```
+
+As we would expect, people with more money do live longer
+
+```{r}
+# Happiness and GDP - Can Money Buy Happiness?
+
+ggplot(data = WorldHappiness) +
+  geom_point(mapping = aes(Happiness.Score, GDPpercapita, color = Region))
+
+```
+
+These plots suggest that money can buy happiness. See correlation analysis below for correlation strength and significance.
+
+```{r}
+#Happiness by Region
+WorldHappiness_Region <- WorldHappiness %>% 
+  group_by(Region) %>%
+  dplyr::summarize(mean_Happiness = mean(Happiness.Score, na.rm = TRUE), 
+                   mean_LE = mean(LifeExpectancy, na.rm = TRUE),
+                   mean_GDP = mean(GDPpercapita, na.rm = TRUE),
+                   mean_FSS = mean(FamilySocialSupport, na.rm = TRUE),
+                   mean_Freedom = mean(Freedom, na.rm = TRUE),
+                   mean_Trust = mean(TrustGovCorrup, na.rm = TRUE),
+                   mean_Generosity = mean(Generosity, na.rm = TRUE)) %>%
+  arrange(desc(mean_Happiness))  
+
+ggplot(data = WorldHappiness_Region) +
+  geom_col(mapping = aes(x = Region, y = mean_Happiness, fill = Region))
+```
+
+It looks like South Asia and Sub-Saharan Africa are the two least happy regions, while Australia and New Zealand, North America, North America and ANZ, and Western Europe score higher on happiness. This seems to suggest that higher GDP, more political freedom, and longer life expectancy are important variables.
+
+```{r}
+# Happiness by Year
+WorldHappiness_Year <- WorldHappiness %>% 
+  group_by(Year) %>%
+  dplyr::summarize(mean_Happiness = mean(Happiness.Score, na.rm = TRUE), 
+                   mean_LE = mean(LifeExpectancy, na.rm = TRUE),
+                   mean_GDP = mean(GDPpercapita, na.rm = TRUE),
+                   mean_FSS = mean(FamilySocialSupport, na.rm = TRUE),
+                   mean_Freedom = mean(Freedom, na.rm = TRUE),
+                   mean_Trust = mean(TrustGovCorrup, na.rm = TRUE),
+                   mean_Generosity = mean(Generosity, na.rm = TRUE)) %>%
+  arrange(desc(mean_Happiness))  
+
+ggplot(data = WorldHappiness_Year) +
+  geom_col(mapping = aes(x = Year, y = mean_Happiness), fill = "green")
+```
+
+It looks like the world is getting happier. Surprisingly, this trend continued and even strengthened during 2020.
+
+```{r}
+# Life expectancy by year
+
+ggplot(data = WorldHappiness_Year) +
+  geom_col(mapping = aes(x = Year, y = mean_LE), fill = "purple")
+```
+
+Life expectancy dropped in 2021 - is this due to pandemic deaths, wars, natural fluctuation, or something else entirely? Unclear.
+
+## Correlations
+
+```{r}
+#make nicer dataframe with only the numeric columns
+World_Happiness_Small <- WorldHappiness %>%
+  select(Happiness.Score, GDPpercapita, FamilySocialSupport, LifeExpectancy, Freedom, TrustGovCorrup, Generosity, Year)
+```
+
+
+```{r}
+#corrgram to find correlations
+library(corrgram)
+corrgram(World_Happiness_Small)
+```
+
+So, we'll investigate 8 correlations from this corrgram. 
+
+### 1. Happiness and GDP
+
+```{r}
+cor.test(WorldHappiness$Happiness.Score, WorldHappiness$GDPpercapita)
+```
+Significant; strong correlation
+
+
+```{r}
+#regression
+HappinessandGDP <- lm(WorldHappiness$Happiness.Score ~ WorldHappiness$GDPpercapita)
+
+summary(HappinessandGDP)
+```
+
+```{r} 
+B0 = HappinessandGDP$coefficients [1]
+B0
+B1 = HappinessandGDP$coefficients [2]
+B1
+Happ1 = WorldHappiness$Happiness.Score [1]
+Happ1
+E1 = HappinessandGDP$residuals [1]
+E1
+
+GDP1 = B0 + B1*Happ1 + E1
+
+GDP1
+```
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(Happiness.Score, GDPpercapita)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+GDPpercapita is a strong predictor of happiness
+
+### 2. Happiness and FSS
+
+```{r}
+cor.test(WorldHappiness$Happiness.Score, WorldHappiness$FamilySocialSupport)
+```
+significant, medium correlation
+
+```{r}
+#regression
+HappinessandFSS <- lm(WorldHappiness$Happiness.Score ~ WorldHappiness$FamilySocialSupport)
+
+B0 = HappinessandFSS$coefficients [1]
+B0
+B1 = HappinessandFSS$coefficients [2]
+B1
+Happ1 = WorldHappiness$Happiness.Score [1]
+Happ1
+E1 = HappinessandFSS$residuals [1]
+E1
+
+FSS1 = B0 + B1*Happ1 + E1
+
+FSS1
+```
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(Happiness.Score, FamilySocialSupport)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+Increased Family Social support correlates with increased happiness but not as strongly as increased GDPpercapita
+
+### 3. Happiness and LE
+
+```{r}
+cor.test(WorldHappiness$Happiness.Score, WorldHappiness$LifeExpectancy)
+```
+strong correlation, significant
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(Happiness.Score, LifeExpectancy)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+Life expectancy correlates with greater happiness. I wonder how much life expectancy and GDPpercapita are reflecting similar things. Will do a partial correlation exploration later for these two variables. 
+
+### 4. Happiness and Freedom
+
+```{r}
+cor.test(WorldHappiness$Happiness.Score, WorldHappiness$Freedom)
+```
+significant; medium correlation 
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(Happiness.Score, Freedom)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+
+### 5. GDP and FSS
+
+```{r}
+cor.test(WorldHappiness$GDPpercapita, WorldHappiness$FamilySocialSupport)
+```
+medium, significant
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(GDPpercapita, FamilySocialSupport)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+
+
+### 6. GDP and LE
+
+```{r}
+cor.test(WorldHappiness$GDPpercapita, WorldHappiness$LifeExpectancy)
+```
+strong, significant 
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(GDPpercapita, LifeExpectancy)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+
+### 7. FSS and LE
+
+```{r}
+cor.test(WorldHappiness$FamilySocialSupport, WorldHappiness$LifeExpectancy)
+```
+medium, significant 
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(FamilySocialSupport, LifeExpectancy)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+
+### 8. Trust and Gov Corrupt; Freedom
+
+```{r}
+cor.test(WorldHappiness$TrustGovCorrup, WorldHappiness$Freedom)
+```
+medium, significant
+
+```{r}
+ggplot(data = WorldHappiness, mapping = aes(TrustGovCorrup, Freedom)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = FALSE)
+```
+This data looks like it would be better fit by nonlinear regression. 
+
+## Partial Correlation
+
+```{r}
+#remove na values for ppcor package functions
+
+Happiness.Score_notNA <- World_Happiness_Small$Happiness.Score[!is.na(World_Happiness_Small$Happiness.Score)]
+
+GDPpercapita_notNA <- World_Happiness_Small$GDPpercapita[!is.na(World_Happiness_Small$GDPpercapita)]
+
+LifeExpectancy_notNA <- World_Happiness_Small$LifeExpectancy[!is.na(World_Happiness_Small$LifeExpectancy)]
+
+Freedom_notNA <- World_Happiness_Small$Freedom[!is.na(World_Happiness_Small$Freedom)]
+
+FSS_notNA <- World_Happiness_Small$FamilySocialSupport[!is.na(World_Happiness_Small$FamilySocialSupport)]
+```
+
+GDPpercapita and LE 
+```{r}
+library(ppcor)
+pcor.test(Happiness.Score_notNA, GDPpercapita_notNA, LifeExpectancy_notNA)
+```
+partial correlation: medium correlation, very significant
+
+```{r}
+#semipartial correlation
+
+pcor.test(Happiness.Score_notNA, GDPpercapita_notNA, LifeExpectancy_notNA)
+```
+GDP still predicts happiness when adjusted for LE
+
+```{r}
+spcor.test(Happiness.Score_notNA, LifeExpectancy_notNA, GDPpercapita_notNA)
+```
+Life expectancy predicts Happiness score when adjusted for GDP weakly but significantly. 
+
+```{r}
+spcor.test(Happiness.Score_notNA, Freedom_notNA, GDPpercapita_notNA)
+```
+significant, stronger than life expectancy but still weak
+
+```{r}
+spcor.test(Happiness.Score_notNA, FSS_notNA, GDPpercapita_notNA)
+```
+similar to Freedom in strength of prediction, slightly weaker though
+
+## Multivariate
+
+Create a model to predict happiness based on GDP per capita, Freedom, and Family Social Support
+
+```{r}
+HappinessModel <- lm(WorldHappiness$Happiness.Score ~ WorldHappiness$Freedom+ WorldHappiness$GDPpercapita +WorldHappiness$FamilySocialSupport)
+
+summary(HappinessModel)
+```
+
+Each variable is still significant; taken all together they are very strong predictors of Happiness
+
+## Standardize Coefficients
+
+```{r}
+library(lm.beta)
+lm.beta(HappinessModel)
+```
+
+Strongest predictor is GDPpercapita; next is Freedom and finally Family Social Support. 
+
+## Conclusions
+
+GDP per capita is a very strong predictor of Happiness at a national level. So perhaps money can buy happiness after all. 
